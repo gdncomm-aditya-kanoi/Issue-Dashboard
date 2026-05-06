@@ -19,197 +19,183 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Service
 public class IssueClassificationService {
 
-    private static final List<String> ALLOWED_CATEGORIES = Arrays.asList(
-            "BACKEND",
-            "FRONTEND",
-            "INFRA",
-            "DATA",
-            "ACCESS",
-            "OTHER");
+  private static final List<String> ALLOWED_CATEGORIES =
+      Arrays.asList("BACKEND", "FRONTEND", "INFRA", "DATA", "ACCESS", "OTHER");
 
-    private final IssueRepository issueRepository;
-    private final GeminiClient geminiClient;
-    private final ObjectMapper objectMapper;
+  private final IssueRepository issueRepository;
+  private final GeminiClient geminiClient;
+  private final ObjectMapper objectMapper;
 
-    public IssueClassificationService(IssueRepository issueRepository, GeminiClient geminiClient,
-            ObjectMapper objectMapper) {
-        this.issueRepository = issueRepository;
-        this.geminiClient = geminiClient;
-        this.objectMapper = objectMapper;
+  public IssueClassificationService(IssueRepository issueRepository, GeminiClient geminiClient,
+      ObjectMapper objectMapper) {
+    this.issueRepository = issueRepository;
+    this.geminiClient = geminiClient;
+    this.objectMapper = objectMapper;
+  }
+
+
+  public Map<String, String> classifyPendingIssues() {
+    List<Issue> pendingIssues = issueRepository.findByProcessedFalse();
+    Map<String, String> pendingIssueMap = buildIssueMap(pendingIssues);
+
+    if (pendingIssues.isEmpty()) {
+      return Collections.emptyMap();
     }
 
-    public Map<String, String> getPendingIssuesAsMap() {
-        return buildIssueMap(issueRepository.findByProcessedFalse());
+    Map<String, String> issueCategories = pendingIssueMap.isEmpty() ?
+        fallbackCategories(buildIssueIdMap(pendingIssues)) :
+        classifyWithGemini(pendingIssueMap);
+    List<Issue> updatedIssues = new ArrayList<>();
+
+    for (Issue issue : pendingIssues) {
+      String issueId = issue.getMessageId();
+      if (issueId == null) {
+        continue;
+      }
+
+      String category = normalizeCategory(issueCategories.get(issueId));
+      issue.setCategory(category);
+      issue.setProcessed(true);
+      updatedIssues.add(issue);
+      issueCategories.put(issueId, category);
     }
 
-    public Map<String, String> classifyPendingIssues() {
-        List<Issue> pendingIssues = issueRepository.findByProcessedFalse();
-        Map<String, String> pendingIssueMap = buildIssueMap(pendingIssues);
+    issueRepository.saveAll(updatedIssues);
+    return issueCategories;
+  }
 
-        if (pendingIssues.isEmpty()) {
-            return Collections.emptyMap();
-        }
+  private Map<String, String> buildIssueIdMap(List<Issue> issues) {
+    Map<String, String> issueIds = new LinkedHashMap<>();
+    for (Issue issue : issues) {
+      if (issue != null && issue.getMessageId() != null) {
+        issueIds.put(issue.getMessageId(), "");
+      }
+    }
+    return issueIds;
+  }
 
-        Map<String, String> issueCategories = pendingIssueMap.isEmpty()
-                ? fallbackCategories(buildIssueIdMap(pendingIssues))
-                : classifyWithGemini(pendingIssueMap);
-        List<Issue> updatedIssues = new ArrayList<>();
+  private Map<String, String> buildIssueMap(List<Issue> issues) {
+    Map<String, String> issueMap = new LinkedHashMap<>();
+    for (Issue issue : issues) {
+      if (issue == null || issue.getMessageId() == null) {
+        continue;
+      }
 
-        for (Issue issue : pendingIssues) {
-            String issueId = issue.getId();
-            if (issueId == null) {
-                continue;
-            }
+      String text = issue.getText();
+      if (text == null || text.trim().isEmpty()) {
+        continue;
+      }
 
-            String category = normalizeCategory(issueCategories.get(issueId));
-            issue.setCategory(category);
-            issue.setProcessed(true);
-            updatedIssues.add(issue);
+      issueMap.put(issue.getMessageId(), text);
+    }
+    return issueMap;
+  }
+
+  private Map<String, String> classifyWithGemini(Map<String, String> pendingIssueMap) {
+    try {
+      String prompt = buildPrompt(pendingIssueMap);
+      String response = geminiClient.generateContent(prompt);
+      return parseGeminiResponse(response, pendingIssueMap);
+    } catch (Exception e) {
+      System.err.println("Gemini classification failed: " + e.getMessage());
+      return fallbackCategories(pendingIssueMap);
+    }
+  }
+
+  private String buildPrompt(Map<String, String> pendingIssueMap) throws IOException {
+    String inputJson = objectMapper.writeValueAsString(pendingIssueMap);
+
+    return "You are classifying Microsoft Teams issue messages.\n"
+        + "Use only these categories: BACKEND, FRONTEND, INFRA, DATA, ACCESS, OTHER.\n"
+        + "Return only a valid JSON array with one object per issue, using exactly this shape:\n"
+        + "[{\"issueId\":\"123\",\"category\":\"BACKEND\"}]\n" + "Do not add markdown, explanations, or extra fields.\n"
+        + "Classify every issue in the input map.\n" + "Input map:\n" + inputJson;
+  }
+
+  private Map<String, String> parseGeminiResponse(String response, Map<String, String> pendingIssueMap) {
+    Map<String, String> issueCategories = new LinkedHashMap<>();
+
+    if (response == null || response.trim().isEmpty()) {
+      return fallbackCategories(pendingIssueMap);
+    }
+
+    try {
+      JsonNode root = objectMapper.readTree(extractJsonPayload(response));
+
+      if (root.isArray()) {
+        for (JsonNode item : root) {
+          String issueId = textValue(item, "issueId");
+          String category = normalizeCategory(textValue(item, "category"));
+          if (issueId != null && !issueId.trim().isEmpty() && pendingIssueMap.containsKey(issueId)) {
             issueCategories.put(issueId, category);
+          }
         }
-
-        issueRepository.saveAll(updatedIssues);
-        return issueCategories;
+      } else if (root.isObject()) {
+        root.fields().forEachRemaining(entry -> {
+          if (pendingIssueMap.containsKey(entry.getKey())) {
+            issueCategories.put(entry.getKey(), normalizeCategory(entry.getValue().asText()));
+          }
+        });
+      }
+    } catch (Exception e) {
+      return fallbackCategories(pendingIssueMap);
     }
 
-    private Map<String, String> buildIssueIdMap(List<Issue> issues) {
-        Map<String, String> issueIds = new LinkedHashMap<>();
-        for (Issue issue : issues) {
-            if (issue != null && issue.getId() != null) {
-                issueIds.put(issue.getId(), "");
-            }
-        }
-        return issueIds;
+    for (String issueId : pendingIssueMap.keySet()) {
+      if (!issueCategories.containsKey(issueId)) {
+        issueCategories.put(issueId, "OTHER");
+      }
     }
 
-    private Map<String, String> buildIssueMap(List<Issue> issues) {
-        Map<String, String> issueMap = new LinkedHashMap<>();
-        for (Issue issue : issues) {
-            if (issue == null || issue.getId() == null) {
-                continue;
-            }
+    return issueCategories;
+  }
 
-            String text = issue.getText();
-            if (text == null || text.trim().isEmpty()) {
-                continue;
-            }
+  private String extractJsonPayload(String response) {
+    String cleaned = response.trim();
 
-            issueMap.put(issue.getId(), text);
-        }
-        return issueMap;
+    if (cleaned.startsWith("```")) {
+      cleaned = cleaned.replaceFirst("^```(?:json)?\\s*", "");
+      cleaned = cleaned.replaceFirst("\\s*```$", "");
     }
 
-    private Map<String, String> classifyWithGemini(Map<String, String> pendingIssueMap) {
-        try {
-            String prompt = buildPrompt(pendingIssueMap);
-            String response = geminiClient.generateContent(prompt);
-            return parseGeminiResponse(response, pendingIssueMap);
-        } catch (Exception e) {
-            System.err.println("Gemini classification failed: " + e.getMessage());
-            return fallbackCategories(pendingIssueMap);
-        }
+    int arrayStart = cleaned.indexOf('[');
+    int arrayEnd = cleaned.lastIndexOf(']');
+    if (arrayStart >= 0 && arrayEnd > arrayStart) {
+      return cleaned.substring(arrayStart, arrayEnd + 1);
     }
 
-    private String buildPrompt(Map<String, String> pendingIssueMap) throws IOException {
-        String inputJson = objectMapper.writeValueAsString(pendingIssueMap);
-
-        return "You are classifying Microsoft Teams issue messages.\n"
-                + "Use only these categories: BACKEND, FRONTEND, INFRA, DATA, ACCESS, OTHER.\n"
-                + "Return only a valid JSON array with one object per issue, using exactly this shape:\n"
-                + "[{\"issueId\":\"123\",\"category\":\"BACKEND\"}]\n"
-                + "Do not add markdown, explanations, or extra fields.\n"
-                + "Classify every issue in the input map.\n"
-                + "Input map:\n"
-                + inputJson;
+    int objectStart = cleaned.indexOf('{');
+    int objectEnd = cleaned.lastIndexOf('}');
+    if (objectStart >= 0 && objectEnd > objectStart) {
+      return cleaned.substring(objectStart, objectEnd + 1);
     }
 
-    private Map<String, String> parseGeminiResponse(String response, Map<String, String> pendingIssueMap) {
-        Map<String, String> issueCategories = new LinkedHashMap<>();
+    return cleaned;
+  }
 
-        if (response == null || response.trim().isEmpty()) {
-            return fallbackCategories(pendingIssueMap);
-        }
-
-        try {
-            JsonNode root = objectMapper.readTree(extractJsonPayload(response));
-
-            if (root.isArray()) {
-                for (JsonNode item : root) {
-                    String issueId = textValue(item, "issueId");
-                    String category = normalizeCategory(textValue(item, "category"));
-                    if (issueId != null && !issueId.trim().isEmpty() && pendingIssueMap.containsKey(issueId)) {
-                        issueCategories.put(issueId, category);
-                    }
-                }
-            } else if (root.isObject()) {
-                root.fields().forEachRemaining(entry ->
-                        {
-                            if (pendingIssueMap.containsKey(entry.getKey())) {
-                                issueCategories.put(entry.getKey(), normalizeCategory(entry.getValue().asText()));
-                            }
-                        });
-            }
-        } catch (Exception e) {
-            return fallbackCategories(pendingIssueMap);
-        }
-
-        for (String issueId : pendingIssueMap.keySet()) {
-            if (!issueCategories.containsKey(issueId)) {
-                issueCategories.put(issueId, "OTHER");
-            }
-        }
-
-        return issueCategories;
+  private Map<String, String> fallbackCategories(Map<String, String> pendingIssueMap) {
+    Map<String, String> fallback = new LinkedHashMap<>();
+    for (String issueId : pendingIssueMap.keySet()) {
+      fallback.put(issueId, "OTHER");
     }
+    return fallback;
+  }
 
-    private String extractJsonPayload(String response) {
-        String cleaned = response.trim();
+  private String textValue(JsonNode node, String fieldName) {
+    JsonNode field = node.get(fieldName);
+    return field == null || field.isNull() ? null : field.asText();
+  }
 
-        if (cleaned.startsWith("```")) {
-            cleaned = cleaned.replaceFirst("^```(?:json)?\\s*", "");
-            cleaned = cleaned.replaceFirst("\\s*```$", "");
-        }
-
-        int arrayStart = cleaned.indexOf('[');
-        int arrayEnd = cleaned.lastIndexOf(']');
-        if (arrayStart >= 0 && arrayEnd > arrayStart) {
-            return cleaned.substring(arrayStart, arrayEnd + 1);
-        }
-
-        int objectStart = cleaned.indexOf('{');
-        int objectEnd = cleaned.lastIndexOf('}');
-        if (objectStart >= 0 && objectEnd > objectStart) {
-            return cleaned.substring(objectStart, objectEnd + 1);
-        }
-
-        return cleaned;
+  private String normalizeCategory(String category) {
+    if (category == null) {
+      return "OTHER";
     }
-
-    private Map<String, String> fallbackCategories(Map<String, String> pendingIssueMap) {
-        Map<String, String> fallback = new LinkedHashMap<>();
-        for (String issueId : pendingIssueMap.keySet()) {
-            fallback.put(issueId, "OTHER");
-        }
-        return fallback;
+    String normalized = category.trim().toUpperCase();
+    for (String allowedCategory : ALLOWED_CATEGORIES) {
+      if (allowedCategory.equals(normalized)) {
+        return normalized;
+      }
     }
-
-    private String textValue(JsonNode node, String fieldName) {
-        JsonNode field = node.get(fieldName);
-        return field == null || field.isNull() ? null : field.asText();
-    }
-
-    private String normalizeCategory(String category) {
-        if (category == null) {
-            return "OTHER";
-        }
-
-        String normalized = category.trim().toUpperCase();
-        for (String allowedCategory : ALLOWED_CATEGORIES) {
-            if (allowedCategory.equals(normalized)) {
-                return normalized;
-            }
-        }
-
-        return "OTHER";
-    }
+    return "OTHER";
+  }
 }

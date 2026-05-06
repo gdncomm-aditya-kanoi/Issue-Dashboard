@@ -25,10 +25,7 @@ public class IssueService {
         issue.setMessageTitle(message.getMessageTitle());
         issue.setText(message.getText());
         issue.setUsername(message.getUser());
-        issue.setSource(resolveSource(message));
         issue.setTimestamp(parseTimestamp(message.getTimestamp()));
-        issue.setSource(message.getChannel());
-        issue.setTimestamp(LocalDateTime.now());
         issue.setSource("MS Teams");
         issue.setProcessed(false);
         return issueRepository.save(issue);
@@ -41,13 +38,6 @@ public class IssueService {
             issueMap.put(issue.getMessageId(), issue.getText());
         }
         return issueMap;
-    }
-
-    private String resolveSource(TeamsMessage message) {
-        if (message.getChannel() != null && !message.getChannel().trim().isEmpty()) {
-            return message.getChannel();
-        }
-        return "TEAMS";
     }
 
     private LocalDateTime parseTimestamp(String timestamp) {
