@@ -4,7 +4,8 @@ import lombok.Data;
 
 @Data
 public class TeamsMessage {
-  private String text;
-  private String user;
-  private String timestamp;
+    private String text;        // actual message content
+    private String user;        // sender name
+    private String channel;     // optional (Teams channel)
+    private String timestamp;
 }

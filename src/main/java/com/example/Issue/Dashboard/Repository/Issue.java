@@ -14,15 +14,12 @@ public class Issue {
 
   @Id
   private String id;
-  @Indexed
   private String text;
-  @Indexed
   private String username;
   private String category;
-  @Indexed
   private LocalDateTime timestamp;
   private boolean processed = false;
   private String severity;
-  private String source = "TEAMS";
+  private String source;
 
 }
