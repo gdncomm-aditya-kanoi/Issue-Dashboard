@@ -1,5 +1,7 @@
 package com.example.Issue.Dashboard.controller;
 
+import java.util.Map;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,4 +22,10 @@ public class TeamsWebhookController {
         Issue savedIssue = issueService.processTeamsMessage(message);
         return ResponseEntity.ok(savedIssue);
     }
+
+    @GetMapping("/get-unprocessed-issues")
+    public Map<String, String> getUnprocessedIssues() {
+        return issueService.getUnprocessedIssues();
+    }
+    
 }
