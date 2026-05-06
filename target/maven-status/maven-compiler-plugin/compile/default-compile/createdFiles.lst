@@ -1,5 +1,12 @@
+META-INF/spring-configuration-metadata.json
+com/example/Issue/Dashboard/Service/SharePointDataService.class
 com/example/Issue/Dashboard/TeamsWebhookController.class
-com/example/Issue/Dashboard/IssueDashboardApplication.class
-com/example/Issue/Dashboard/Repository/IssueRepository.class
-com/example/Issue/Dashboard/DTO/TeamsMessage.class
+com/example/Issue/Dashboard/Repository/SharePointMessageRepository.class
 com/example/Issue/Dashboard/Repository/Issue.class
+com/example/Issue/Dashboard/Service/SharePointAuthService.class
+com/example/Issue/Dashboard/Config/SharePointConfig.class
+com/example/Issue/Dashboard/DTO/TeamsMessage.class
+com/example/Issue/Dashboard/IssueDashboardApplication.class
+com/example/Issue/Dashboard/SharePointController.class
+com/example/Issue/Dashboard/Repository/IssueRepository.class
+com/example/Issue/Dashboard/Repository/SharePointMessage.class
