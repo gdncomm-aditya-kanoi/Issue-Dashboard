@@ -6,10 +6,6 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 
 public interface IssueRepository extends MongoRepository<Issue, String> {
 
-    List<Issue> findByProcessedFalse();
-    
-    boolean existsByMessageId(String messageId);
-    
-    Issue findByMessageId(String messageId);
+  List<Issue> findByProcessedFalse();
 
 }

@@ -3,9 +3,8 @@ package com.example.Issue.Dashboard.Service;
 import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -24,10 +23,6 @@ public class IssueService {
   private IssueClassificationService issueClassificationService;
 
   public Issue processTeamsMessage(TeamsMessage message) {
-    if (issueRepository.existsByMessageId(message.getMessageId())) {
-      return issueRepository.findByMessageId(message.getMessageId());
-    }
-
     Issue issue = new Issue();
     issue.setMessageId(message.getMessageId());
     issue.setMessageTitle(message.getMessageTitle());
