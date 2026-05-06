@@ -12,7 +12,11 @@ import lombok.Data;
 @Data
 public class Issue {
 
+  @Id
+  private String id;
+  
   //Pre AI
+  @Indexed(unique = true)
   private String messageId;
   private String messageTitle;
   private String text;

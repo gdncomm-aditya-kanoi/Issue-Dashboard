@@ -27,9 +27,8 @@ public class TeamsWebhookController {
     return ResponseEntity.ok(savedIssue);
   }
 
-    @GetMapping("/get-unprocessed-issues")
-    public boolean getUnprocessedIssues() throws IOException {
-        return issueService.getUnprocessedIssues();
-    }
-
+  @GetMapping("/get-unprocessed-issues")
+  public boolean getUnprocessedIssues() throws IOException {
+    return issueService.getUnprocessedIssues();
+  }
 }

@@ -1,11 +1,14 @@
 package com.example.Issue.Dashboard.Service;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
 
 import com.example.Issue.Dashboard.Config.GeminiClient;
@@ -17,48 +20,37 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Service
 public class IssueClassificationService {
 
-    private static final List<String> ALLOWED_CATEGORIES = List.of(
-            "INVENTORY",
-            "PR_MANAGEMENT",
-            "DATA_INTEGRITY",
-            "SYSTEM_PERFORMANCE",
-            "ACCESS_CONTROL",
-            "INTEGRATION",
-            "WORKFLOW",
-            "REPORTING",
-            "OTHER");
+  private static final List<String> ALLOWED_CATEGORIES =
+      List.of("INVENTORY", "PR_MANAGEMENT", "DATA_INTEGRITY", "SYSTEM_PERFORMANCE", "ACCESS_CONTROL", "INTEGRATION",
+          "WORKFLOW", "REPORTING", "OTHER");
 
   private final IssueRepository issueRepository;
   private final GeminiClient geminiClient;
   private final ObjectMapper objectMapper;
+  private final MongoTemplate mongoTemplate;
 
   public IssueClassificationService(IssueRepository issueRepository, GeminiClient geminiClient,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper, MongoTemplate mongoTemplate) {
     this.issueRepository = issueRepository;
     this.geminiClient = geminiClient;
     this.objectMapper = objectMapper;
+    this.mongoTemplate = mongoTemplate;
   }
 
 
   public void classifyPendingIssues(List<Issue> unprocessedIssues) throws IOException {
-
     if (unprocessedIssues.isEmpty()) {
       return;
     }
-
-    // Create issueMap for Gemini classification
     Map<String, String> issueMap = new LinkedHashMap<>();
     for (Issue issue : unprocessedIssues) {
       if (issue.getMessageId() != null) {
         issueMap.put(issue.getMessageId(), issue.getText());
       }
     }
-
-    // Get categories from Gemini
     Map<String, String> issueCategories = classifyWithGemini(issueMap);
 
-    // Update the same Issue entities that were passed in (no additional DB calls)
-    List<Issue> updatedIssues = new ArrayList<>();
+    int updatedCount = 0;
     for (Issue issue : unprocessedIssues) {
       String messageId = issue.getMessageId();
       if (messageId == null) {
@@ -66,14 +58,16 @@ public class IssueClassificationService {
       }
 
       String category = normalizeCategory(issueCategories.get(messageId));
-      issue.setCategory(category);
-      issue.setProcessed(true);
-      updatedIssues.add(issue);
+      Query query = new Query(Criteria.where("messageId").is(messageId));
+      Update update = new Update().set("category", category).set("processed", true);
+
+      var result = mongoTemplate.updateFirst(query, update, Issue.class);
+      if (result.getModifiedCount() > 0) {
+        updatedCount++;
+      }
     }
-    
-    if (!updatedIssues.isEmpty()) {
-      issueRepository.saveAll(updatedIssues);
-    }
+
+    System.out.println("Successfully updated " + updatedCount + " issues with classifications");
   }
 
 
@@ -91,24 +85,21 @@ public class IssueClassificationService {
   private String buildPrompt(Map<String, String> pendingIssueMap) throws IOException {
     String inputJson = objectMapper.writeValueAsString(pendingIssueMap);
 
-        return "You are classifying Microsoft Teams issue messages.\n"
-                + "Use only these categories:\n"
-                + "- INVENTORY: Stock issues, item problems, quantity mismatches, reserved stock\n"
-                + "- PR_MANAGEMENT: Purchase requisition issues, PR creation, PR status, PR data problems\n"
-                + "- DATA_INTEGRITY: Duplicate data, data mismatches, synchronization issues\n"
-                + "- SYSTEM_PERFORMANCE: Loading issues, timeouts, processing delays, UI freezing\n"
-                + "- ACCESS_CONTROL: Permission issues, role problems, authentication\n"
-                + "- INTEGRATION: SAP integration, external system connectivity, data exchange\n"
-                + "- WORKFLOW: Process issues, approval workflows, state management\n"
-                + "- REPORTING: Report generation, data export, analytics issues\n"
-                + "- OTHER: Issues that don't fit above categories\n"
-                + "Return only a valid JSON array with one object per issue, using exactly this shape:\n"
-                + "[{\"issueId\":\"123\",\"category\":\"INVENTORY\"}]\n"
-                + "Do not add markdown, explanations, or extra fields.\n"
-                + "Classify every issue in the input map.\n"
-                + "Input map:\n"
-                + inputJson;
-    }
+    return "You are classifying Microsoft Teams issue messages.\n" + "Use only these categories:\n"
+        + "- INVENTORY: Stock issues, item problems, quantity mismatches, reserved stock\n"
+        + "- PR_MANAGEMENT: Purchase requisition issues, PR creation, PR status, PR data problems\n"
+        + "- DATA_INTEGRITY: Duplicate data, data mismatches, synchronization issues\n"
+        + "- SYSTEM_PERFORMANCE: Loading issues, timeouts, processing delays, UI freezing\n"
+        + "- ACCESS_CONTROL: Permission issues, role problems, authentication\n"
+        + "- INTEGRATION: SAP integration, external system connectivity, data exchange\n"
+        + "- WORKFLOW: Process issues, approval workflows, state management\n"
+        + "- REPORTING: Report generation, data export, analytics issues\n"
+        + "- OTHER: Issues that don't fit above categories\n"
+        + "Return only a valid JSON array with one object per issue, using exactly this shape:\n"
+        + "[{\"issueId\":\"123\",\"category\":\"INVENTORY\"}]\n"
+        + "Do not add markdown, explanations, or extra fields.\n" + "Classify every issue in the input map.\n"
+        + "Input map:\n" + inputJson;
+  }
 
   private Map<String, String> parseGeminiResponse(String response, Map<String, String> pendingIssueMap) {
     Map<String, String> issueCategories = new LinkedHashMap<>();
@@ -184,17 +175,17 @@ public class IssueClassificationService {
     return field == null || field.isNull() ? null : field.asText();
   }
 
-    private String normalizeCategory(String category) {
-        if (category == null) {
-            return "OTHER";
-        }
-
-        String normalized = category.trim().toUpperCase();
-        for (String allowedCategory : ALLOWED_CATEGORIES) {
-            if (allowedCategory.equals(normalized)) {
-                return normalized;
-            }
-        }
-        return "OTHER";
+  private String normalizeCategory(String category) {
+    if (category == null) {
+      return "OTHER";
     }
+
+    String normalized = category.trim().toUpperCase();
+    for (String allowedCategory : ALLOWED_CATEGORIES) {
+      if (allowedCategory.equals(normalized)) {
+        return normalized;
+      }
+    }
+    return "OTHER";
+  }
 }
