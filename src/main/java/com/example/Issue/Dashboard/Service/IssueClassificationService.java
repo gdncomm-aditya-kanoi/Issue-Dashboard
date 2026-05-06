@@ -2,7 +2,6 @@ package com.example.Issue.Dashboard.Service;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,12 +18,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Service
 public class IssueClassificationService {
 
-    private static final List<String> ALLOWED_CATEGORIES = Arrays.asList(
-            "BACKEND",
-            "FRONTEND",
-            "INFRA",
-            "DATA",
-            "ACCESS",
+    private static final List<String> ALLOWED_CATEGORIES = List.of(
+            "INVENTORY",
+            "PR_MANAGEMENT",
+            "DATA_INTEGRITY",
+            "SYSTEM_PERFORMANCE",
+            "ACCESS_CONTROL",
+            "INTEGRATION",
+            "WORKFLOW",
+            "REPORTING",
             "OTHER");
 
     private final IssueRepository issueRepository;
@@ -114,9 +116,18 @@ public class IssueClassificationService {
         String inputJson = objectMapper.writeValueAsString(pendingIssueMap);
 
         return "You are classifying Microsoft Teams issue messages.\n"
-                + "Use only these categories: BACKEND, FRONTEND, INFRA, DATA, ACCESS, OTHER.\n"
+                + "Use only these categories:\n"
+                + "- INVENTORY: Stock issues, item problems, quantity mismatches, reserved stock\n"
+                + "- PR_MANAGEMENT: Purchase requisition issues, PR creation, PR status, PR data problems\n"
+                + "- DATA_INTEGRITY: Duplicate data, data mismatches, synchronization issues\n"
+                + "- SYSTEM_PERFORMANCE: Loading issues, timeouts, processing delays, UI freezing\n"
+                + "- ACCESS_CONTROL: Permission issues, role problems, authentication\n"
+                + "- INTEGRATION: SAP integration, external system connectivity, data exchange\n"
+                + "- WORKFLOW: Process issues, approval workflows, state management\n"
+                + "- REPORTING: Report generation, data export, analytics issues\n"
+                + "- OTHER: Issues that don't fit above categories\n"
                 + "Return only a valid JSON array with one object per issue, using exactly this shape:\n"
-                + "[{\"issueId\":\"123\",\"category\":\"BACKEND\"}]\n"
+                + "[{\"issueId\":\"123\",\"category\":\"INVENTORY\"}]\n"
                 + "Do not add markdown, explanations, or extra fields.\n"
                 + "Classify every issue in the input map.\n"
                 + "Input map:\n"
@@ -209,7 +220,6 @@ public class IssueClassificationService {
                 return normalized;
             }
         }
-
         return "OTHER";
     }
 }
