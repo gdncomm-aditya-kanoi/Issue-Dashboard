@@ -1,5 +1,6 @@
 package com.example.Issue.Dashboard.Service;
 
+import java.time.OffsetDateTime;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -24,6 +25,8 @@ public class IssueService {
         issue.setMessageTitle(message.getMessageTitle());
         issue.setText(message.getText());
         issue.setUsername(message.getUser());
+        issue.setSource(resolveSource(message));
+        issue.setTimestamp(parseTimestamp(message.getTimestamp()));
         issue.setSource(message.getChannel());
         issue.setTimestamp(LocalDateTime.now());
         issue.setSource("MS Teams");
@@ -38,5 +41,24 @@ public class IssueService {
             issueMap.put(issue.getMessageId(), issue.getText());
         }
         return issueMap;
+    }
+
+    private String resolveSource(TeamsMessage message) {
+        if (message.getChannel() != null && !message.getChannel().trim().isEmpty()) {
+            return message.getChannel();
+        }
+        return "TEAMS";
+    }
+
+    private LocalDateTime parseTimestamp(String timestamp) {
+        if (timestamp == null || timestamp.trim().isEmpty()) {
+            return LocalDateTime.now();
+        }
+
+        try {
+            return OffsetDateTime.parse(timestamp).toLocalDateTime();
+        } catch (Exception e) {
+            return LocalDateTime.now();
+        }
     }
 }
