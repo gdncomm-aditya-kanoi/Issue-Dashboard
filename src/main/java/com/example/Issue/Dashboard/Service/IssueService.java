@@ -1,5 +1,6 @@
 package com.example.Issue.Dashboard.Service;
 
+import java.time.OffsetDateTime;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -22,9 +23,8 @@ public class IssueService {
         Issue issue = new Issue();
         issue.setText(message.getText());
         issue.setUsername(message.getUser());
-        issue.setSource(message.getChannel());
-        issue.setTimestamp(LocalDateTime.now());
-        issue.setSource("Power Automate");
+        issue.setSource(resolveSource(message));
+        issue.setTimestamp(parseTimestamp(message.getTimestamp()));
         issue.setProcessed(false);
         return issueRepository.save(issue);
     }
@@ -36,5 +36,24 @@ public class IssueService {
             issueMap.put(issue.getId(), issue.getText());
         }
         return issueMap;
+    }
+
+    private String resolveSource(TeamsMessage message) {
+        if (message.getChannel() != null && !message.getChannel().trim().isEmpty()) {
+            return message.getChannel();
+        }
+        return "TEAMS";
+    }
+
+    private LocalDateTime parseTimestamp(String timestamp) {
+        if (timestamp == null || timestamp.trim().isEmpty()) {
+            return LocalDateTime.now();
+        }
+
+        try {
+            return OffsetDateTime.parse(timestamp).toLocalDateTime();
+        } catch (Exception e) {
+            return LocalDateTime.now();
+        }
     }
 }
