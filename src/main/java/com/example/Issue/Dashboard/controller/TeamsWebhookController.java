@@ -36,5 +36,5 @@ public class TeamsWebhookController {
     public ResponseEntity<Map<String, String>> classifyPendingIssues() {
         return ResponseEntity.ok(issueClassificationService.classifyPendingIssues());
     }
-    
+
 }

@@ -12,14 +12,18 @@ import lombok.Data;
 @Data
 public class Issue {
 
-  @Id
-  private String id;
+  //Pre AI
+  private String messageId;
+  private String messageTitle;
   private String text;
   private String username;
-  private String category;
-  private LocalDateTime timestamp;
-  private boolean processed = false;
-  private String severity;
   private String source;
+  private LocalDateTime timestamp;
+
+  //Post AI
+  private String category;
+  private String severity;
+
+  private boolean processed = false;
 
 }
