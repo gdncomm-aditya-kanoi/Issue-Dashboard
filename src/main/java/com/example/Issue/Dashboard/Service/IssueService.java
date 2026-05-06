@@ -1,5 +1,6 @@
 package com.example.Issue.Dashboard.Service;
 
+import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -19,6 +20,9 @@ public class IssueService {
     @Autowired
     private IssueRepository issueRepository;
 
+    @Autowired
+    private IssueClassificationService issueClassificationService;
+
     public Issue processTeamsMessage(TeamsMessage message) {
         Issue issue = new Issue();
         issue.setMessageId(message.getMessageId());
@@ -31,13 +35,18 @@ public class IssueService {
         return issueRepository.save(issue);
     }
 
-    public Map<String, String> getUnprocessedIssues() {
+    public boolean getUnprocessedIssues() {
         List<Issue> unprocessedIssues = issueRepository.findByProcessedFalse();
         Map<String, String> issueMap = new HashMap<>();
         for (Issue issue : unprocessedIssues) {
             issueMap.put(issue.getMessageId(), issue.getText());
         }
-        return issueMap;
+        try {
+            issueClassificationService.classifyPendingIssues(issueMap);
+        } catch (IOException e) {
+            return false;
+        }
+        return true;
     }
 
     private LocalDateTime parseTimestamp(String timestamp) {

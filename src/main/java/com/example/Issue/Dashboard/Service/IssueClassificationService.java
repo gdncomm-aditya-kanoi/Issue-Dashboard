@@ -2,7 +2,6 @@ package com.example.Issue.Dashboard.Service;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,62 +40,42 @@ public class IssueClassificationService {
   }
 
 
-  public Map<String, String> classifyPendingIssues() {
-    List<Issue> pendingIssues = issueRepository.findByProcessedFalse();
-    Map<String, String> pendingIssueMap = buildIssueMap(pendingIssues);
+  public void classifyPendingIssues(Map<String, String> issueMap) throws IOException {
 
-    if (pendingIssues.isEmpty()) {
-      return Collections.emptyMap();
+    if (issueMap.isEmpty()) {
+      return;
     }
 
-    Map<String, String> issueCategories = pendingIssueMap.isEmpty() ?
-        fallbackCategories(buildIssueIdMap(pendingIssues)) :
-        classifyWithGemini(pendingIssueMap);
+    Map<String, String> issueCategories = classifyWithGemini(issueMap);
+
+    List<Issue> unprocessedIssues = issueRepository.findByProcessedFalse();
+    Map<String, Issue> issueByMessageId = new LinkedHashMap<>();
+    for (Issue issue : unprocessedIssues) {
+      if (issue.getMessageId() != null) {
+        issueByMessageId.put(issue.getMessageId(), issue);
+      }
+    }
+
     List<Issue> updatedIssues = new ArrayList<>();
 
-    for (Issue issue : pendingIssues) {
-      String issueId = issue.getMessageId();
-      if (issueId == null) {
+    // Update issues that were classified
+    for (String messageId : issueMap.keySet()) {
+      Issue issue = issueByMessageId.get(messageId);
+      if (issue == null) {
         continue;
       }
 
-      String category = normalizeCategory(issueCategories.get(issueId));
+      String category = normalizeCategory(issueCategories.get(messageId));
       issue.setCategory(category);
       issue.setProcessed(true);
       updatedIssues.add(issue);
-      issueCategories.put(issueId, category);
     }
-
-    issueRepository.saveAll(updatedIssues);
-    return issueCategories;
+    
+    if (!updatedIssues.isEmpty()) {
+      issueRepository.saveAll(updatedIssues);
+    }
   }
 
-  private Map<String, String> buildIssueIdMap(List<Issue> issues) {
-    Map<String, String> issueIds = new LinkedHashMap<>();
-    for (Issue issue : issues) {
-      if (issue != null && issue.getMessageId() != null) {
-        issueIds.put(issue.getMessageId(), "");
-      }
-    }
-    return issueIds;
-  }
-
-  private Map<String, String> buildIssueMap(List<Issue> issues) {
-    Map<String, String> issueMap = new LinkedHashMap<>();
-    for (Issue issue : issues) {
-      if (issue == null || issue.getMessageId() == null) {
-        continue;
-      }
-
-      String text = issue.getText();
-      if (text == null || text.trim().isEmpty()) {
-        continue;
-      }
-
-      issueMap.put(issue.getMessageId(), text);
-    }
-    return issueMap;
-  }
 
   private Map<String, String> classifyWithGemini(Map<String, String> pendingIssueMap) {
     try {

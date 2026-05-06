@@ -1,6 +1,8 @@
+com/example/Issue/Dashboard/Service/IssueClassificationService.class
 com/example/Issue/Dashboard/DTO/TeamsMessage.class
 com/example/Issue/Dashboard/IssueDashboardApplication.class
 com/example/Issue/Dashboard/Repository/IssueRepository.class
+com/example/Issue/Dashboard/Config/GeminiClient.class
 com/example/Issue/Dashboard/controller/TeamsWebhookController.class
 com/example/Issue/Dashboard/Repository/Issue.class
 com/example/Issue/Dashboard/Service/IssueService.class

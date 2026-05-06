@@ -1,6 +1,6 @@
 package com.example.Issue.Dashboard.controller;
 
-import java.util.Map;
+import java.io.IOException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -15,26 +15,21 @@ import com.example.Issue.Dashboard.Service.IssueService;
 @RequestMapping("/api")
 public class TeamsWebhookController {
 
-    @Autowired
-    private IssueService issueService;
+  @Autowired
+  private IssueService issueService;
 
-    @Autowired
-    private IssueClassificationService issueClassificationService;
+  @Autowired
+  private IssueClassificationService issueClassificationService;
 
-    @PostMapping("/webhook")
-    public ResponseEntity<Issue> receiveMessage(@RequestBody TeamsMessage message) {
-        Issue savedIssue = issueService.processTeamsMessage(message);
-        return ResponseEntity.ok(savedIssue);
-    }
+  @PostMapping("/webhook")
+  public ResponseEntity<Issue> receiveMessage(@RequestBody TeamsMessage message) {
+    Issue savedIssue = issueService.processTeamsMessage(message);
+    return ResponseEntity.ok(savedIssue);
+  }
 
     @GetMapping("/get-unprocessed-issues")
-    public Map<String, String> getUnprocessedIssues() {
+    public boolean getUnprocessedIssues() throws IOException {
         return issueService.getUnprocessedIssues();
-    }
-
-    @PostMapping("/classify-pending")
-    public ResponseEntity<Map<String, String>> classifyPendingIssues() {
-        return ResponseEntity.ok(issueClassificationService.classifyPendingIssues());
     }
 
 }
