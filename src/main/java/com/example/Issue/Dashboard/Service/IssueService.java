@@ -37,12 +37,12 @@ public class IssueService {
 
     public boolean getUnprocessedIssues() {
         List<Issue> unprocessedIssues = issueRepository.findByProcessedFalse();
-        Map<String, String> issueMap = new HashMap<>();
-        for (Issue issue : unprocessedIssues) {
-            issueMap.put(issue.getMessageId(), issue.getText());
+        if (unprocessedIssues.isEmpty()) {
+            return true;
         }
+        
         try {
-            issueClassificationService.classifyPendingIssues(issueMap);
+            issueClassificationService.classifyPendingIssues(unprocessedIssues);
         } catch (IOException e) {
             return false;
         }

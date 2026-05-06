@@ -40,28 +40,28 @@ public class IssueClassificationService {
   }
 
 
-  public void classifyPendingIssues(Map<String, String> issueMap) throws IOException {
+  public void classifyPendingIssues(List<Issue> unprocessedIssues) throws IOException {
 
-    if (issueMap.isEmpty()) {
+    if (unprocessedIssues.isEmpty()) {
       return;
     }
 
-    Map<String, String> issueCategories = classifyWithGemini(issueMap);
-
-    List<Issue> unprocessedIssues = issueRepository.findByProcessedFalse();
-    Map<String, Issue> issueByMessageId = new LinkedHashMap<>();
+    // Create issueMap for Gemini classification
+    Map<String, String> issueMap = new LinkedHashMap<>();
     for (Issue issue : unprocessedIssues) {
       if (issue.getMessageId() != null) {
-        issueByMessageId.put(issue.getMessageId(), issue);
+        issueMap.put(issue.getMessageId(), issue.getText());
       }
     }
 
-    List<Issue> updatedIssues = new ArrayList<>();
+    // Get categories from Gemini
+    Map<String, String> issueCategories = classifyWithGemini(issueMap);
 
-    // Update issues that were classified
-    for (String messageId : issueMap.keySet()) {
-      Issue issue = issueByMessageId.get(messageId);
-      if (issue == null) {
+    // Update the same Issue entities that were passed in (no additional DB calls)
+    List<Issue> updatedIssues = new ArrayList<>();
+    for (Issue issue : unprocessedIssues) {
+      String messageId = issue.getMessageId();
+      if (messageId == null) {
         continue;
       }
 
