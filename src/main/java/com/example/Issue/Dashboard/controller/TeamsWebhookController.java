@@ -27,5 +27,4 @@ public class TeamsWebhookController {
     public Map<String, String> getUnprocessedIssues() {
         return issueService.getUnprocessedIssues();
     }
-    
 }

@@ -20,11 +20,13 @@ public class IssueService {
 
     public Issue processTeamsMessage(TeamsMessage message) {
         Issue issue = new Issue();
+        issue.setMessageId(message.getMessageId());
+        issue.setMessageTitle(message.getMessageTitle());
         issue.setText(message.getText());
         issue.setUsername(message.getUser());
         issue.setSource(message.getChannel());
         issue.setTimestamp(LocalDateTime.now());
-        issue.setSource("Power Automate");
+        issue.setSource("MS Teams");
         issue.setProcessed(false);
         return issueRepository.save(issue);
     }
@@ -33,7 +35,7 @@ public class IssueService {
         List<Issue> unprocessedIssues = issueRepository.findByProcessedFalse();
         Map<String, String> issueMap = new HashMap<>();
         for (Issue issue : unprocessedIssues) {
-            issueMap.put(issue.getId(), issue.getText());
+            issueMap.put(issue.getMessageId(), issue.getText());
         }
         return issueMap;
     }
